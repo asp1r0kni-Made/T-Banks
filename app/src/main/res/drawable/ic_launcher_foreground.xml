@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Щит -->
+    <path android:pathData="M36,29H72Q77,29 77,34V58Q77,69 54,81Q31,69 31,58V34Q31,29 36,29Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="31" android:startY="29" android:endX="77" android:endY="81" android:type="linear">
+                <item android:offset="0" android:color="#FFFFEC75" />
+                <item android:offset="1" android:color="#FFFFB800" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Буква Т -->
+    <path android:fillColor="#FF17140A" android:pathData="M41,40H67V48H58V68H50V48H41Z" />
+</vector>

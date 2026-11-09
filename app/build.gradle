@@ -1,0 +1,54 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Эти значения workflow передаёт при каждой сборке (-PversionCode=...).
+def vCode  = (project.findProperty('versionCode') ?: '1').toInteger()
+def vName  = project.findProperty('versionName') ?: '1.0.0'
+def repoSlug = project.findProperty('repoSlug') ?: 'OWNER/REPO'
+
+android {
+    namespace 'com.tbankpremium.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.tbankpremium.app'   // НИКОГДА не меняйте: иначе будет «новое» приложение
+        minSdk 26
+        targetSdk 34
+        versionCode vCode                      // растёт с каждой сборкой -> Android ставит поверх
+        versionName vName
+        buildConfigField 'String', 'REPO', "\"${repoSlug}\""
+    }
+
+    signingConfigs {
+        release {
+            // Один и тот же ключ для всех сборок = обновление поверх без переустановки
+            storeFile file(System.getenv('KS_FILE') ?: "${rootDir}/signing/release.jks")
+            storePassword System.getenv('KS_PASS') ?: 'tbank-premium'
+            keyAlias System.getenv('KEY_ALIAS') ?: 'tbank'
+            keyPassword System.getenv('KEY_PASS') ?: 'tbank-premium'
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
