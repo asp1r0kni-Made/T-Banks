@@ -5,7 +5,7 @@
 
 ### Первый запуск
 1. Выложите `server.py` на PythonAnywhere (шаги — в комментарии в начале файла).
-2. Откройте `app/src/main/assets/www/config.js` и впишите адрес: `https://ВАШЛОГИН.pythonanywhere.com`
+2. Откройте `app/src/main/assets/www/config.js` и впишите адрес: `https://playerok.pythonanywhere.com`
    (или оставьте как есть и введите адрес в приложении: экран входа → «Сервер»).
 3. Дальше — сборка APK, как описано ниже.
 
