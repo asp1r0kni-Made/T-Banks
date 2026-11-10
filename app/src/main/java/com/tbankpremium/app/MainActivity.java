@@ -25,7 +25,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         web = new WebView(this);
-        web.setBackgroundColor(0xFF0A0A0E);
+        web.setBackgroundColor(0xFF0B0C11);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setLongClickable(false);
         web.setOnLongClickListener(v -> true);
@@ -99,6 +99,16 @@ public class MainActivity extends Activity {
         @JavascriptInterface public int versionCode() { return BuildConfig.VERSION_CODE; }
         @JavascriptInterface public void checkUpdate() { updater.check(); }
         @JavascriptInterface public void startUpdate() { updater.download(); }
+        @JavascriptInterface public void setBars(final boolean dark) {
+            runOnUiThread(() -> {
+                int c = dark ? 0xFF0B0C11 : 0xFFECEEF4;
+                getWindow().setStatusBarColor(c);
+                getWindow().setNavigationBarColor(c);
+                int f = dark ? 0 : (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+                getWindow().getDecorView().setSystemUiVisibility(f);
+                if (web != null) web.setBackgroundColor(c);
+            });
+        }
         @JavascriptInterface public void haptic() {
             runOnUiThread(() -> {
                 if (web != null) web.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);

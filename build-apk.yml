@@ -1,0 +1,70 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # нужно, чтобы создавать Release с APK
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      # Необязательно: свой ключ подписи из секретов репозитория (см. README).
+      - name: Use custom keystore from secrets
+        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        env:
+          P_STORE: ${{ secrets.KS_PASS }}
+          P_ALIAS: ${{ secrets.KEY_ALIAS }}
+          P_KEY: ${{ secrets.KEY_PASS }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "KS_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          echo "KS_PASS=$P_STORE" >> "$GITHUB_ENV"
+          echo "KEY_ALIAS=$P_ALIAS" >> "$GITHUB_ENV"
+          echo "KEY_PASS=$P_KEY" >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        run: >
+          gradle assembleRelease --no-daemon --stacktrace
+          -PversionCode=${{ github.run_number }}
+          -PversionName=1.0.${{ github.run_number }}
+          -PrepoSlug=${{ github.repository }}
+
+      - name: Prepare APK
+        run: cp app/build/outputs/apk/release/app-release.apk TBank-Premium.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TBank-Premium-apk
+          path: TBank-Premium.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: 1.0.${{ github.run_number }}
+          body: ${{ github.event.head_commit.message || 'Обновление приложения' }}
+          files: TBank-Premium.apk
+          make_latest: true
