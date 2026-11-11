@@ -1,70 +1,105 @@
 name: Build APK
-
 on:
   push:
-    branches: [ main, master ]
   workflow_dispatch:
-
-permissions:
-  contents: write   # нужно, чтобы создавать Release с APK
-
-concurrency:
-  group: build-apk
-  cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-
     steps:
       - uses: actions/checkout@v4
-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: 17
+      - run: npm install
+      - run: npx cap add android
+      - name: Постоянный ключ подписи (APK обновляется поверх старого)
+        run: |
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
+      - name: Иконка приложения
+        run: cp -r res/. android/app/src/main/res/
+      - name: Номер версии
+        run: sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" android/app/build.gradle
+      - name: Биометрия (отпечаток) - библиотека и разрешение
+        run: |
+          sed -i '/^dependencies {/a\    implementation "androidx.biometric:biometric:1.1.0"' android/app/build.gradle
+          sed -i 's#<application#<uses-permission android:name="android.permission.USE_BIOMETRIC" />\n    <application#' android/app/src/main/AndroidManifest.xml
+      - name: MainActivity (масштаб текста и мост биометрии)
+        run: |
+          cat > android/app/src/main/java/com/gramwallet/app/MainActivity.java <<'EOF'
+          package com.gramwallet.app;
 
+          import android.webkit.JavascriptInterface;
+          import android.webkit.WebSettings;
+          import androidx.biometric.BiometricManager;
+          import androidx.biometric.BiometricPrompt;
+          import androidx.core.content.ContextCompat;
+          import com.getcapacitor.BridgeActivity;
+          import java.util.concurrent.Executor;
+
+          public class MainActivity extends BridgeActivity {
+            @Override
+            public void onStart() {
+              super.onStart();
+              WebSettings s = getBridge().getWebView().getSettings();
+              s.setTextZoom(100);
+              s.setMinimumFontSize(1);
+              s.setMinimumLogicalFontSize(1);
+              getBridge().getWebView().addJavascriptInterface(new Bio(), "NativeBio");
+            }
+
+            private void js(final String code) {
+              runOnUiThread(new Runnable() {
+                public void run() {
+                  getBridge().getWebView().evaluateJavascript(code, null);
+                }
+              });
+            }
+
+            public class Bio {
+              @JavascriptInterface
+              public boolean available() {
+                return BiometricManager.from(MainActivity.this)
+                    .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS;
+              }
+
+              @JavascriptInterface
+              public void prompt(final String title) {
+                runOnUiThread(new Runnable() {
+                  public void run() {
+                    Executor ex = ContextCompat.getMainExecutor(MainActivity.this);
+                    BiometricPrompt bp = new BiometricPrompt(MainActivity.this, ex, new BiometricPrompt.AuthenticationCallback() {
+                      @Override
+                      public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult r) {
+                        js("window.__bio&&window.__bio(true)");
+                      }
+                      @Override
+                      public void onAuthenticationError(int c, CharSequence m) {
+                        js("window.__bio&&window.__bio(false)");
+                      }
+                    });
+                    BiometricPrompt.PromptInfo info = new BiometricPrompt.PromptInfo.Builder()
+                        .setTitle(title)
+                        .setNegativeButtonText("Ввести PIN")
+                        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK)
+                        .build();
+                    bp.authenticate(info);
+                  }
+                });
+              }
+            }
+          }
+          EOF
+      - run: npx cap sync android
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
-
-      # Необязательно: свой ключ подписи из секретов репозитория (см. README).
-      - name: Use custom keystore from secrets
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
-        env:
-          P_STORE: ${{ secrets.KS_PASS }}
-          P_ALIAS: ${{ secrets.KEY_ALIAS }}
-          P_KEY: ${{ secrets.KEY_PASS }}
-        run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-          echo "KS_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-          echo "KS_PASS=$P_STORE" >> "$GITHUB_ENV"
-          echo "KEY_ALIAS=$P_ALIAS" >> "$GITHUB_ENV"
-          echo "KEY_PASS=$P_KEY" >> "$GITHUB_ENV"
-
-      - name: Build release APK
-        run: >
-          gradle assembleRelease --no-daemon --stacktrace
-          -PversionCode=${{ github.run_number }}
-          -PversionName=1.0.${{ github.run_number }}
-          -PrepoSlug=${{ github.repository }}
-
-      - name: Prepare APK
-        run: cp app/build/outputs/apk/release/app-release.apk TBank-Premium.apk
-
+          gradle-version: 8.2.1
+      - run: cd android && gradle assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: TBank-Premium-apk
-          path: TBank-Premium.apk
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ github.run_number }}
-          target_commitish: ${{ github.sha }}
-          name: 1.0.${{ github.run_number }}
-          body: ${{ github.event.head_commit.message || 'Обновление приложения' }}
-          files: TBank-Premium.apk
-          make_latest: true
+          name: GramWallet-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
